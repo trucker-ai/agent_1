@@ -1,10 +1,10 @@
 # AI多Agent工作流系统
 
-一个基于Python的AI多Agent协作工作流系统，支持完整的软件开发生命周期管理。
+一个基于 **LangChain/LangGraph** 的AI多Agent协作工作流系统，支持完整的软件开发生命周期管理。
 
 ## 📋 功能概述
 
-该系统实现了一个完整的AI多Agent协作平台，包含以下核心功能：
+该系统实现了一个完整的AI多Agent协作平台，基于 LangChain 和 LangGraph 框架构建，包含以下核心功能：
 
 ### 🔧 核心组件
 
@@ -21,7 +21,7 @@
 | **项目经理Agent** | 项目监控、进度跟踪、风险评估 | [agents/project_manager.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/agents/project_manager.py) |
 | **知识工程Agent** | Skill生成、文档输出、知识沉淀 | [agents/knowledge_engineer.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/agents/knowledge_engineer.py) |
 
-### 🛠️ 工具模块
+### 🛠️ 工具模块（基于 LangChain BaseTool）
 
 | 工具 | 说明 | 文件路径 |
 |------|------|----------|
@@ -37,7 +37,8 @@
 | **项目记忆系统** | 持久化存储、搜索查询 | [memory/project_memory.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/memory/project_memory.py) |
 | **任务规划器** | 任务管理、状态追踪 | [planning/task_planner.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/planning/task_planner.py) |
 | **成本追踪器** | API成本管理、预算控制 | [cost_control/cost_tracker.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/cost_control/cost_tracker.py) |
-| **项目组工作流** | 工作流编排、流程管理 | [workflow/project_team.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/workflow/project_team.py) |
+| **项目组工作流** | 原有工作流编排 | [workflow/project_team.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/workflow/project_team.py) |
+| **LangGraph工作流** | 基于LangGraph的有向图工作流 | [workflow/langgraph_workflow.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/workflow/langgraph_workflow.py) |
 
 ## 🚀 快速开始
 
@@ -49,14 +50,11 @@
 ### 安装依赖
 
 ```bash
-# 初始化UV环境
+# 初始化UV环境（如未初始化）
 uv init
 
 # 安装依赖
 uv sync
-
-# 安装额外依赖
-uv add requests pytest pytest-cov pycodestyle autopep8
 ```
 
 ### 启动系统
@@ -74,50 +72,67 @@ uv run python main.py --list-workflows
 
 ## 📖 使用方法
 
-### 1. 执行单个Agent任务
+### 1. 使用原有模式
 
 ```bash
-# 调用产品经理Agent分析需求
-uv run python main.py --agent product_manager --task "分析产品需求"
+# 列出Agent
+uv run python main.py --list-agents
 
-# 调用开发者Agent编写代码
-uv run python main.py --agent developer --task "编写用户登录模块代码"
+# 执行工作流
+uv run python main.py --workflow "完整流程" --project "我的项目"
 
-# 调用测试工程师Agent执行测试
-uv run python main.py --agent tester --task "执行单元测试"
+# 执行单个任务
+uv run python main.py --agent product_manager --task "分析需求"
 ```
 
-### 2. 执行工作流
-
-系统支持以下工作流：
-
-| 工作流名称 | 说明 | 包含步骤 |
-|-----------|------|----------|
-| **需求到设计** | 需求分析到设计阶段 | 产品经理→需求工程师→需求评审→设计师 |
-| **设计到开发** | 设计到开发阶段 | 设计师→开发者→代码评审 |
-| **开发到测试** | 开发到测试阶段 | 测试计划→测试执行→测试报告 |
-| **完整流程** | 完整的开发生命周期 | 需求→设计→开发→测试→监控→知识沉淀 |
+### 2. 使用 LangGraph 模式
 
 ```bash
-# 执行需求到设计工作流
-uv run python main.py --workflow "需求到设计" --project "我的项目"
+# 使用 LangGraph 模式列出Agent
+uv run python main.py --langgraph --list-agents
 
-# 执行完整流程工作流
-uv run python main.py --workflow "完整流程" --project "我的项目"
+# 使用 LangGraph 模式执行单个任务
+uv run python main.py --langgraph --agent product_manager --task "分析需求"
+
+# 使用 LangGraph 模式执行完整工作流
+uv run python main.py --langgraph --project "我的项目"
 ```
 
 ### 3. 查看系统状态
 
 ```bash
-# 查看系统状态
+# 查看系统状态（原有模式）
 uv run python main.py --status
+
+# 查看系统状态（LangGraph模式）
+uv run python main.py --langgraph --status
 ```
 
-### 4. 项目管理
+## 🔄 LangGraph 工作流
 
-```bash
-# 初始化新项目
-uv run python main.py --project "新项目名称" --task "初始化"
+### 工作流架构
+
+LangGraph 使用有向图定义工作流，节点顺序如下：
+
+```
+产品经理 → 需求工程师 → 需求评审 → 设计师 → 开发者 → 代码审查 → 测试 → 项目经理 → 知识工程 → END
+```
+
+### 工作流状态管理
+
+工作流使用 `WorkflowState` 进行状态管理：
+
+```python
+class WorkflowState(TypedDict):
+    project_name: str        # 项目名称
+    task_description: str    # 任务描述
+    context: Dict[str, Any]  # 上下文信息
+    results: List[...]       # 执行结果列表
+    current_agent: str       # 当前执行的Agent
+    step: int                # 当前步骤
+    max_steps: int           # 最大步骤数
+    is_complete: bool        # 是否完成
+    error: Optional[str]     # 错误信息
 ```
 
 ## 🧩 Agent功能详解
@@ -186,28 +201,6 @@ uv run python main.py --project "新项目名称" --task "初始化"
 - `生成文档` / `输出文档` - 生成文档
 - `知识沉淀` - 沉淀项目知识
 
-## 🔄 工作流流程
-
-### 需求到设计流程
-```
-产品经理分析需求 → 需求工程师完善需求 → 需求评审Agent评审 → 设计师进行设计
-```
-
-### 设计到开发流程
-```
-设计师交互设计 → 开发者技术方案 → 开发者代码实现 → 代码评审Agent审查
-```
-
-### 开发到测试流程
-```
-测试工程师测试计划 → 测试工程师执行测试 → 测试工程师测试报告
-```
-
-### 完整流程
-```
-需求分析 → 需求完善 → 需求评审 → UI设计 → 交互设计 → 技术方案 → 代码实现 → 代码审查 → 测试计划 → 测试执行 → 测试报告 → 项目监控 → 知识沉淀
-```
-
 ## 📊 成本管理
 
 系统内置成本追踪功能，支持：
@@ -244,9 +237,9 @@ uv run pycodestyle agents/ tools/ memory/ planning/ cost_control/ workflow/
 
 ```
 agent_1/
-├── agents/                 # Agent模块
+├── agents/                 # Agent模块（基于LangChain）
 │   ├── __init__.py
-│   ├── base_agent.py       # 基础Agent类
+│   ├── base_agent.py       # 基础Agent类（使用ChatPromptTemplate）
 │   ├── orchestrator.py     # 主控大脑
 │   ├── product_manager.py  # 产品经理
 │   ├── requirement_engineer.py  # 需求工程师
@@ -257,7 +250,7 @@ agent_1/
 │   ├── tester.py           # 测试工程师
 │   ├── project_manager.py  # 项目经理
 │   └── knowledge_engineer.py # 知识工程
-├── tools/                  # 工具模块
+├── tools/                  # 工具模块（基于LangChain BaseTool）
 │   ├── __init__.py
 │   ├── file_system.py      # 文件系统工具
 │   ├── code_executor.py    # 代码执行工具
@@ -274,7 +267,8 @@ agent_1/
 │   └── cost_tracker.py     # 成本追踪器
 ├── workflow/               # 工作流模块
 │   ├── __init__.py
-│   └── project_team.py     # 项目组工作流
+│   ├── project_team.py     # 项目组工作流（原有模式）
+│   └── langgraph_workflow.py # LangGraph工作流（新模式）
 ├── config/                 # 配置模块
 │   └── settings.py         # 配置文件
 ├── tests/                  # 测试模块
@@ -285,7 +279,7 @@ agent_1/
 │   ├── test_cost_control.py
 │   └── test_workflow.py
 ├── main.py                 # 入口文件
-├── pyproject.toml          # UV配置
+├── pyproject.toml          # UV配置（包含LangChain依赖）
 └── README.md               # 使用文档
 ```
 
@@ -293,29 +287,58 @@ agent_1/
 
 配置文件位于 [config/settings.py](file:///home/fuck_ai/Documents/learn_for_work/agent_1/config/settings.py)，包含以下配置项：
 
-- `DEBUG` - 调试模式
-- `BUDGET_LIMIT` - 预算限制
-- `LOG_LEVEL` - 日志级别
-- `MEMORY_STORAGE_PATH` - 记忆存储路径
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `ENVIRONMENT` | 运行环境 | `development` |
+| `OPENAI_API_KEY` | OpenAI API密钥 | 空 |
+| `OPENAI_API_BASE` | OpenAI API地址 | `https://api.openai.com/v1` |
+| `LOG_LEVEL` | 日志级别 | `INFO` |
+| `MAX_API_CALLS` | 最大API调用次数 | `1000` |
+| `COST_LIMIT` | 成本限制（美元） | `100.0` |
+
+### 环境变量配置
+
+创建 `.env` 文件：
+
+```env
+ENVIRONMENT=development
+OPENAI_API_KEY=your-api-key-here
+OPENAI_API_BASE=https://api.openai.com/v1
+LOG_LEVEL=INFO
+MAX_API_CALLS=1000
+COST_LIMIT=100.0
+```
 
 ## 📝 扩展指南
 
 ### 添加新Agent
 
 1. 创建新的Agent类，继承自 `BaseAgent`
-2. 实现 `execute` 方法
+2. 实现 `get_system_prompt()` 方法
 3. 在 `agents/__init__.py` 中导出
-4. 在 `workflow/project_team.py` 中注册
+4. 在 `workflow/langgraph_workflow.py` 中注册
 
 ### 添加新工具
 
-1. 创建工具类
-2. 在 `tools/__init__.py` 中导出
-3. 在 `workflow/project_team.py` 中初始化
+1. 创建工具类，继承自 `langchain_core.tools.BaseTool`
+2. 定义输入参数模型（继承自 `BaseModel`）
+3. 实现 `_run()` 和 `_arun()` 方法
+4. 在 `tools/__init__.py` 中导出
 
-### 添加新工作流
+### 添加新工作流节点
 
-在 `workflow/project_team.py` 中的 `execute_workflow` 方法添加新的工作流。
+在 `workflow/langgraph_workflow.py` 中的 `_build_graph()` 方法添加新节点和边。
+
+## 🛠️ 技术栈
+
+| 框架/库 | 版本 | 用途 |
+|---------|------|------|
+| Python | 3.10+ | 编程语言 |
+| LangChain | 1.3+ | LLM集成和工具调用 |
+| LangGraph | 1.2+ | 工作流编排 |
+| LangChain-OpenAI | 1.2+ | OpenAI LLM集成 |
+| Pydantic | 2.0+ | 数据验证 |
+| UV | latest | 包管理器 |
 
 ## 📄 许可证
 
