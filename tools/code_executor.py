@@ -1,115 +1,45 @@
+from typing import Optional
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
 import subprocess
 import tempfile
 import os
-from typing import Optional, Dict, Any
 
+class CodeExecutorInput(BaseModel):
+    code: str = Field(description="要执行的Python代码")
+    timeout: Optional[int] = Field(default=30, description="执行超时时间（秒）")
 
-class CodeExecutor:
-    def __init__(self):
-        self.sandbox_dir = tempfile.mkdtemp(prefix="code_exec_")
-
-    def execute_python(self, code: str, timeout: int = 30) -> Dict[str, Any]:
-        result = {
-            "success": False,
-            "output": "",
-            "error": "",
-            "execution_time": 0
-        }
-
+class CodeExecutor(BaseTool):
+    name: str = "code_executor"
+    description: str = "代码执行工具，用于安全执行Python代码"
+    args_schema: type = CodeExecutorInput
+    
+    def _run(self, code: str, timeout: int = 30) -> str:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(code)
+            temp_file = f.name
+        
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-                f.write(code)
-                temp_file = f.name
-
-            process = subprocess.run(
-                ["python", temp_file],
+            result = subprocess.run(
+                ['python', temp_file],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                cwd=self.sandbox_dir
+                cwd=os.path.dirname(temp_file)
             )
-
-            if process.returncode == 0:
-                result["success"] = True
-                result["output"] = process.stdout
+            
+            if result.returncode == 0:
+                return f"执行成功:\n{result.stdout}"
             else:
-                result["error"] = process.stderr
-
-            os.unlink(temp_file)
-
+                return f"执行失败 (退出码: {result.returncode}):\n错误: {result.stderr}"
+        
         except subprocess.TimeoutExpired:
-            result["error"] = f"Execution timed out after {timeout} seconds"
+            return f"执行超时 ({timeout}秒)"
         except Exception as e:
-            result["error"] = f"Error executing code: {str(e)}"
-
-        return result
-
-    def execute_shell(self, command: str, timeout: int = 30) -> Dict[str, Any]:
-        result = {
-            "success": False,
-            "output": "",
-            "error": "",
-            "execution_time": 0
-        }
-
-        try:
-            process = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=self.sandbox_dir
-            )
-
-            if process.returncode == 0:
-                result["success"] = True
-                result["output"] = process.stdout
-            else:
-                result["error"] = process.stderr
-
-        except subprocess.TimeoutExpired:
-            result["error"] = f"Command timed out after {timeout} seconds"
-        except Exception as e:
-            result["error"] = f"Error executing command: {str(e)}"
-
-        return result
-
-    def is_safe_code(self, code: str) -> bool:
-        dangerous_patterns = [
-            "os.system",
-            "subprocess",
-            "__import__",
-            "eval(",
-            "exec(",
-            "open(",
-            "file(",
-            "socket.",
-            "import os",
-            "import sys",
-            "import subprocess",
-            "del ",
-            "rm ",
-            "kill "
-        ]
-
-        for pattern in dangerous_patterns:
-            if pattern in code:
-                return False
-        return True
-
-    def execute_safe_python(self, code: str, timeout: int = 30) -> Dict[str, Any]:
-        if not self.is_safe_code(code):
-            return {
-                "success": False,
-                "output": "",
-                "error": "Potentially dangerous code detected. Execution blocked.",
-                "execution_time": 0
-            }
-
-        return self.execute_python(code, timeout)
-
-    def cleanup(self):
-        if os.path.exists(self.sandbox_dir):
-            import shutil
-            shutil.rmtree(self.sandbox_dir)
+            return f"执行异常: {str(e)}"
+        finally:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+    
+    async def _arun(self, code: str, timeout: int = 30) -> str:
+        return self._run(code, timeout)

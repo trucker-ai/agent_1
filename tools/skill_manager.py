@@ -1,169 +1,68 @@
-import os
-import importlib
-import inspect
-from typing import Dict, Any, List, Optional, Callable
-from dataclasses import dataclass
+from typing import Optional, Dict, Any, List
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
 
+class SkillManagerInput(BaseModel):
+    action: str = Field(description="操作类型: register, list, execute")
+    skill_name: Optional[str] = Field(description="技能名称")
+    skill_info: Optional[Dict[str, Any]] = Field(description="技能信息")
+    params: Optional[Dict[str, Any]] = Field(default={}, description="执行参数")
 
-@dataclass
-class SkillInfo:
-    name: str
-    description: str
-    module_path: str
-    function_name: str
-    parameters: Dict[str, Any]
-    is_available: bool = True
-
-
-class SkillManager:
+class SkillManager(BaseTool):
+    name: str = "skill_manager"
+    description: str = "技能管理器，用于注册、查询和执行技能"
+    args_schema: type = SkillManagerInput
+    
     def __init__(self):
-        self.skills: Dict[str, SkillInfo] = {}
-        self.skill_instances: Dict[str, Any] = {}
-
-    def discover_skills(self, directory: str = "skills") -> List[str]:
-        discovered = []
-
-        if not os.path.exists(directory):
-            os.makedirs(directory, exist_ok=True)
-            return discovered
-
-        for filename in os.listdir(directory):
-            if filename.endswith(".py") and not filename.startswith("_"):
-                module_name = filename[:-3]
-                module_path = os.path.join(directory, filename)
-
-                try:
-                    spec = importlib.util.spec_from_file_location(
-                        module_name, module_path)
-                    if spec and spec.loader:
-                        module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(module)
-
-                        for name, obj in inspect.getmembers(module):
-                            if inspect.isfunction(obj) or inspect.isclass(obj):
-                                description = getattr(
-                                    obj, '__doc__', '') or f"{name} skill"
-                                params = {}
-
-                                if inspect.isfunction(obj):
-                                    sig = inspect.signature(obj)
-                                    params = {
-                                        param: str(
-                                            sig.parameters[param].annotation)
-                                        for param in sig.parameters
-                                    }
-
-                                skill_info = SkillInfo(
-                                    name=name,
-                                    description=description,
-                                    module_path=module_path,
-                                    function_name=name,
-                                    parameters=params
-                                )
-                                self.skills[name] = skill_info
-                                discovered.append(name)
-                except Exception as e:
-                    continue
-
-        return discovered
-
-    def register_skill(self, name: str, description: str, func: Callable):
-        sig = inspect.signature(func)
-        params = {
-            param: str(sig.parameters[param].annotation)
-            for param in sig.parameters
-        }
-
-        skill_info = SkillInfo(
-            name=name,
-            description=description,
-            module_path="",
-            function_name=name,
-            parameters=params
-        )
-        self.skills[name] = skill_info
-        self.skill_instances[name] = func
-
-    def get_skill(self, name: str) -> Optional[SkillInfo]:
-        return self.skills.get(name)
-
-    def list_skills(self) -> List[Dict[str, Any]]:
-        return [
-            {
-                "name": skill.name,
-                "description": skill.description,
-                "parameters": skill.parameters,
-                "is_available": skill.is_available
-            }
-            for skill in self.skills.values()
-        ]
-
-    def execute_skill(self, name: str, **kwargs) -> Dict[str, Any]:
-        if name not in self.skills:
-            return {
-                "success": False,
-                "result": None,
-                "error": f"Skill not found: {name}"
-            }
-
+        super().__init__()
+        object.__setattr__(self, '_skills', {})
+    
+    @property
+    def skills(self) -> Dict[str, Dict[str, Any]]:
+        return object.__getattribute__(self, '_skills')
+    
+    def _run(self, action: str, skill_name: Optional[str] = None, 
+             skill_info: Optional[Dict[str, Any]] = None, 
+             params: Optional[Dict[str, Any]] = None) -> str:
         try:
-            if name in self.skill_instances:
-                func = self.skill_instances[name]
+            if action == "register":
+                if not skill_name or not skill_info:
+                    return "注册技能需要提供技能名称和技能信息"
+                self.skills[skill_name] = skill_info
+                return f"技能 '{skill_name}' 注册成功"
+            
+            elif action == "list":
+                if not self.skills:
+                    return "暂无已注册的技能"
+                return "\n".join([f"- {name}: {info.get('description', '无描述')}" 
+                                for name, info in self.skills.items()])
+            
+            elif action == "execute":
+                if not skill_name:
+                    return "执行技能需要提供技能名称"
+                if skill_name not in self.skills:
+                    return f"技能 '{skill_name}' 未注册"
+                skill = self.skills[skill_name]
+                return f"执行技能 '{skill_name}': {skill.get('description', '')}\n参数: {params}"
+            
+            elif action == "delete":
+                if not skill_name:
+                    return "删除技能需要提供技能名称"
+                if skill_name in self.skills:
+                    del self.skills[skill_name]
+                    return f"技能 '{skill_name}' 删除成功"
+                return f"技能 '{skill_name}' 未找到"
+            
             else:
-                skill_info = self.skills[name]
-                spec = importlib.util.spec_from_file_location(
-                    skill_info.name,
-                    skill_info.module_path
-                )
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-                    func = getattr(module, skill_info.function_name)
-                    self.skill_instances[name] = func
-                else:
-                    return {
-                        "success": False,
-                        "result": None,
-                        "error": "Failed to load skill module"
-                    }
-
-            result = func(**kwargs)
-            return {
-                "success": True,
-                "result": result,
-                "error": ""
-            }
+                return f"未知操作: {action}"
+        
         except Exception as e:
-            return {
-                "success": False,
-                "result": None,
-                "error": str(e)
-            }
-
-    def unregister_skill(self, name: str) -> bool:
-        if name in self.skills:
-            del self.skills[name]
-            if name in self.skill_instances:
-                del self.skill_instances[name]
-            return True
-        return False
-
-    def get_skill_requirements(self, name: str) -> Optional[List[str]]:
-        skill = self.skills.get(name)
-        if not skill:
-            return None
-
-        try:
-            spec = importlib.util.spec_from_file_location(
-                skill.name,
-                skill.module_path
-            )
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                obj = getattr(module, skill.function_name)
-                return getattr(obj, 'requirements', [])
-        except Exception:
-            pass
-
-        return []
+            return f"操作失败: {str(e)}"
+    
+    async def _arun(self, action: str, skill_name: Optional[str] = None,
+                    skill_info: Optional[Dict[str, Any]] = None,
+                    params: Optional[Dict[str, Any]] = None) -> str:
+        return self._run(action, skill_name, skill_info, params)
+    
+    def get_skills(self) -> List[str]:
+        return list(self.skills.keys())

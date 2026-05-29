@@ -27,6 +27,7 @@ class LangGraphWorkflow:
         self.memory = ProjectMemory()
         self.cost_tracker = CostTracker()
         self.skill_manager = SkillManager()
+        self.llm = ChatOpenAI(model="gpt-4o-mini")
         
         self._initialize_agents()
         self._initialize_tools()
@@ -50,7 +51,7 @@ class LangGraphWorkflow:
             agent.set_cost_tracker(self.cost_tracker)
     
     def _initialize_tools(self):
-        self.tools = [
+        self.tools: List[BaseTool] = [
             FileSystemTool(),
             CodeExecutor(),
             MCPAPIClient(),
@@ -186,9 +187,13 @@ class LangGraphWorkflow:
     def get_status(self) -> Dict[str, Any]:
         return {
             "agents": list(self.agents.keys()),
+            "tools": [tool.name for tool in self.tools],
             "memory_entries": self.memory.get_memory_count(),
             "cost": self.cost_tracker.get_cost_summary()
         }
     
     def list_agents(self) -> List[str]:
         return list(self.agents.keys())
+    
+    def list_tools(self) -> List[str]:
+        return [tool.name for tool in self.tools]
