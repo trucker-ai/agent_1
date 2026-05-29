@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  agent-workflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agent-workflow
+    volumes:
+      - ./:/app
+      - ./.env:/app/.env
+    environment:
+      - ENVIRONMENT=production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE}
+    command: ["uv", "run", "python", "main.py", "--status"]
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+networks:
+  agent-network:
+    driver: bridge

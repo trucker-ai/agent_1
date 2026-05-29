@@ -70,6 +70,19 @@ uv run python main.py --list-agents
 uv run python main.py --list-workflows
 ```
 
+### 使用 Docker 运行
+
+```bash
+# 构建镜像
+docker build -t agent-workflow .
+
+# 运行容器
+docker run -it --rm -v "$(pwd)/.env:/app/.env" agent-workflow --status
+
+# 使用 docker-compose（推荐）
+docker-compose up --build
+```
+
 ## 📖 使用方法
 
 ### 1. 使用原有模式
